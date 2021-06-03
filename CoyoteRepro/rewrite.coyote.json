@@ -1,0 +1,7 @@
+{
+  "AssembliesPath": "./CoyoteRepro.Tests/bin/net5.0",
+  "Assemblies": [
+    "CoyoteRepro.dll",
+    "CoyoteRepro.Tests.dll"
+  ]
+}
