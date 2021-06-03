@@ -1,9 +1,13 @@
 using System;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Coyote;
+using Microsoft.Coyote.SystematicTesting;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace CoyoteRepro.Tests
 {
@@ -11,8 +15,10 @@ namespace CoyoteRepro.Tests
     {
         private readonly HttpClient _client;
         private readonly GrpcChannel _channel;
+        private readonly ITestOutputHelper _outputHelper;
 
-        public CoyoteUnitTest(TestWebApplicationFactory<Startup> factory)
+        public CoyoteUnitTest(TestWebApplicationFactory<Startup> factory,
+            ITestOutputHelper outputHelper)
         {
             _client = factory
                 .WithWebHostBuilder(builder =>
@@ -27,37 +33,66 @@ namespace CoyoteRepro.Tests
             {
                 HttpClient = _client
             });
+
+            _outputHelper = outputHelper;
         }
 
         [Fact]
-        public async Task Coyote_Should_Not_Throw_NRE()
+        public void Coyote_Should_Not_Throw_NRE()
         {
-            var client = new Greeter.GreeterClient(_channel);
-
-            var request = new HelloRequest
+            RunCoyoteTest(_outputHelper, async () =>
             {
-                Name = "World!"
-            };
+                var client = new Greeter.GreeterClient(_channel);
 
-            var response = await client.SayHelloAsync(request);
+                var request = new HelloRequest
+                {
+                    Name = "World!"
+                };
 
-            Assert.Equal("Hello World!", response.Message);
+                var response = await client.SayHelloAsync(request);
+
+                Assert.Equal("Hello World!", response.Message);
+            });
         }
 
         [Fact]
-        public async Task Coyote_Should_Succeed()
+        public void Coyote_Should_Succeed()
         {
-            var client = new Greeter.GreeterClient(_channel);
-
-            var request = new HelloRequest
+            RunCoyoteTest(_outputHelper, async () =>
             {
-                Name = "World!"
-            };
+                var client = new Greeter.GreeterClient(_channel);
 
-            var unaryCall = client.SayHelloAsync(request);
-            var response = await unaryCall.ResponseAsync;
+                var request = new HelloRequest
+                {
+                    Name = "World!"
+                };
 
-            Assert.Equal("Hello World!", response.Message);
+                var unaryCall = client.SayHelloAsync(request);
+                var response = await unaryCall.ResponseAsync;
+
+                Assert.Equal("Hello World!", response.Message);
+            });
+        }
+
+        private void RunCoyoteTest(ITestOutputHelper output, Func<Task> test, [CallerMemberName] string testName = null)
+        {
+            var config = Configuration.Create()
+                .WithTestingIterations(1000)
+                .WithNoBugTraceRepro();
+
+            TestingEngine engine = TestingEngine.Create(config, test);
+
+            engine.Run();
+
+            var report = engine.TestReport;
+            output.WriteLine("Coyote found {0} bug(s).", report.NumOfFoundBugs);
+
+            if (report.BugReports.Count > 0)
+            {
+                output.WriteLine("Bug Reports: {0}", string.Join("\n", report.BugReports));
+            }
+
+            Assert.True(report.NumOfFoundBugs == 0, $"Coyote found {report.NumOfFoundBugs} bug(s) in {testName}.");
         }
     }
 }

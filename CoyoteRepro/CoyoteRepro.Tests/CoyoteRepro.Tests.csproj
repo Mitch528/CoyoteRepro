@@ -28,7 +28,7 @@
         </None>
     </ItemGroup>
 
-    <Target Name="CoyoteRewriteWindows" AfterTargets="AfterBuild">
+    <Target Name="CoyoteRewrite" AfterTargets="AfterBuild">
         <Exec Command="coyote rewrite ../rewrite.coyote.json"/>
     </Target>
 
